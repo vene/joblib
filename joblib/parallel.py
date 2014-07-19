@@ -181,8 +181,12 @@ class CallBack(object):
             # from dispatch to completion
             old_duration = self.parallel._smoothed_batch_duration
             if old_duration == 0:
+                # First record of duration for this batch size after the last
+                # reset.
                 new_duration = this_batch_duration
             else:
+                # Update the exponentially weighted average of the duration of
+                # batch for the current effective size.
                 new_duration = 0.8 * old_duration + 0.2 * this_batch_duration
             self.parallel._smoothed_batch_duration = new_duration
 
