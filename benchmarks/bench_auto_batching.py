@@ -88,12 +88,12 @@ if __name__ == "__main__":
     # Second pair of benchmarks: one has a cycling task duration pattern that
     # the auto batching feature should be able to track while the other
 
-    # print('# cyclic trend, 2 periods')
-    # slow_time = 0.01
-    # positive_wave = np.cos(np.linspace(1, 8 * np.pi, 1000)) ** 2
-    # cyclic = positive_wave * slow_time
-    # bench_short_tasks(cyclic, **bench_parameters)
-    #
-    # print("shuffling of the previous benchmark: same mean and variance")
-    # np.random.shuffle(cyclic)
-    # bench_short_tasks(cyclic, **bench_parameters)
+    print('# cyclic trend, 2 periods')
+    slow_time = 0.01
+    positive_wave = np.cos(np.linspace(1, 8 * np.pi, 1000)) ** 2
+    cyclic = positive_wave * slow_time
+    bench_short_tasks(cyclic, **bench_parameters)
+
+    print("shuffling of the previous benchmark: same mean and variance")
+    np.random.shuffle(cyclic)
+    bench_short_tasks(cyclic, **bench_parameters)
