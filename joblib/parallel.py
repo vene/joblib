@@ -39,8 +39,8 @@ VALID_BACKENDS = ['multiprocessing', 'threading']
 # Environment variables to protect against bad situations when nesting
 JOBLIB_SPAWNED_PROCESS = "__JOBLIB_SPAWNED_PARALLEL__"
 
-MIN_IDEAL_BATCH_DURATION = 1.0  # seconds
-MAX_IDEAL_BATCH_DURATION = 10.0
+MIN_IDEAL_BATCH_DURATION = .05  # seconds
+MAX_IDEAL_BATCH_DURATION = .5
 
 
 class BatchedCalls(object):
@@ -277,7 +277,7 @@ class Parallel(Logger):
               with TMP, TMPDIR or TEMP environment variables, typically /tmp
               under Unix operating systems.
             Only active when backend="multiprocessing".
-        max_nbytes int, str, or None, optional, 100e6 (100MB) by default
+        max_nbytes int, str, or None, optional, 1M by default
             Threshold on the size of arrays passed to the workers that
             triggers automated memory mapping in temp_folder. Can be an int
             in Bytes, or a human-readable string, e.g., '1M' for 1 megabyte.
@@ -407,7 +407,7 @@ class Parallel(Logger):
          [Parallel(n_jobs=2)]: Done   6 out of   6 | elapsed:    0.0s finished
     '''
     def __init__(self, n_jobs=1, batch_size='auto', backend=None, verbose=0,
-            pre_dispatch='all', temp_folder=None, max_nbytes=100e6,
+            pre_dispatch='2 * n_jobs', temp_folder=None, max_nbytes='1M',
             mmap_mode='r'):
         self.verbose = verbose
         self._mp_context = None

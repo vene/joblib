@@ -43,7 +43,7 @@ def bench_short_tasks(task_times, n_jobs=2, batch_size="auto",
         input_data = None
     t0 = time.time()
     p = Parallel(n_jobs=n_jobs, verbose=verbose, pre_dispatch="2 * n_jobs",
-                 batch_size=batch_size, backend=backend, max_nbytes=int(1e6))
+                 batch_size=batch_size, backend=backend)
     p(delayed(sleep_noop)(max(t, 0), input_data, output_data_size)
       for t in task_times)
     duration = time.time() - t0
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         # batch_size=200,  # batch_size='auto' by default
         # memmap_input=True,  # if True manually memmap input out of timing
         # backend='threading',  # backend='multiprocessing' by default
-        input_data_size=int(2e7),  # input output data size in bytes
+        # input_data_size=int(2e7),  # input output data size in bytes
         output_data_size=int(1e5),  # input output data size in bytes
         n_jobs=2,
         verbose=1,
