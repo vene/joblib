@@ -493,7 +493,10 @@ class Parallel(Logger):
         The effective size of the batch is computed here.
         If there are no more jobs to dispatch, return False, else return True.
         """
-        if self.batch_size == 'auto':
+        if self.batch_size == 'auto' and self.backend == 'threading':
+            # Batching is never beneficial with the threading backend
+            batch_size = 1
+        elif self.batch_size == 'auto':
             old_batch_size = self._effective_batch_size
             batch_duration = self._smoothed_batch_duration
             if (batch_duration > 0 and
