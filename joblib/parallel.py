@@ -165,26 +165,28 @@ class CallBack(object):
     """ Callback used by parallel: it is used for progress reporting, and
         to add data to be processed
     """
-    def __init__(self, index, dispatch_timestamp, batch_size, parallel):
-        self.index = index
+    def __init__(self, dispatch_timestamp, batch_size, parallel):
         self.dispatch_timestamp = dispatch_timestamp
         self.batch_size = batch_size
         self.parallel = parallel
 
     def __call__(self, out):
-        # Update the online mean duration of dispatch to completion time
-        # for individual tasks
-        completion_timestamp = time.time()
-        duration = completion_timestamp - self.dispatch_timestamp
-        old_completed_tasks = self.parallel.n_completed_tasks
-        mean = self.parallel._mean_task_duration
-        new_mean = ((duration * self.batch_size + mean * old_completed_tasks)
-                    / (self.batch_size + old_completed_tasks))
-        # Only the callback thread is updating those two attributes
-        self.parallel._mean_task_duration = new_mean
         self.parallel.n_completed_tasks += self.batch_size
+        this_batch_duration = time.time() - self.dispatch_timestamp
 
-        self.parallel.print_progress(self.index)
+
+        if (self.parallel.batch_size == 'auto'
+                and self.batch_size == self.parallel._effective_batch_size):
+            # Update the smoothed streaming estimate of the duration of a batch
+            # from dispatch to completion
+            old_duration = self.parallel._smoothed_batch_duration
+            if old_duration == 0:
+                new_duration = this_batch_duration
+            else:
+                new_duration = 0.8 * old_duration + 0.2 * this_batch_duration
+            self.parallel._smoothed_batch_duration = new_duration
+
+        self.parallel.print_progress(self.parallel.n_completed_tasks)
         if self.parallel._original_iterable:
             self.parallel.dispatch_next()
 
@@ -436,15 +438,13 @@ class Parallel(Logger):
         self._aborting = False
 
     def dispatch(self, batch):
-        """ Queue the function for computing, with or without multiprocessing
-        """
-        index = len(self._jobs)
+        """Queue the batch for computing, with or without multiprocessing"""
         if self._pool is None:
             job = ImmediateApply(batch)
             self._jobs.append(job)
             self.n_dispatched_tasks += len(batch)
             self.n_completed_tasks += len(batch)
-            if not _verbosity_filter(index, self.verbose):
+            if not _verbosity_filter(self.n_dispatched_tasks, self.verbose):
                 self._print('Done %3i jobs       | elapsed: %s',
                         (self.n_completed_tasks,
                             short_format_time(time.time() - self._start_time)
@@ -455,8 +455,7 @@ class Parallel(Logger):
                 return
             with self._lock:
                 dispatch_timestamp = time.time()
-                batch_size = len(batch)
-                cb = CallBack(index, dispatch_timestamp, batch_size, self)
+                cb = CallBack(dispatch_timestamp, len(batch), self)
                 job = self._pool.apply_async(SafeFunction(batch), callback=cb)
                 self._jobs.append(job)
                 self.n_dispatched_tasks += len(batch)
@@ -475,10 +474,12 @@ class Parallel(Logger):
                     self._dispatch_amount = 0
                     break
 
-            except ValueError:
+            except ValueError as e:
+                if 'generator already executing' not in str(e):
+                    raise
                 # Race condition in accessing a generator, we skip,
                 # the dispatch will be done later.
-                pass
+                break
 
     def dispatch_one_batch(self, iterator):
         """Prefetch the tasks for the next batch and dispatch them.
@@ -487,25 +488,34 @@ class Parallel(Logger):
         If there are no more jobs to dispatch, return False, else return True.
         """
         if self.batch_size == 'auto':
-            batch_duration = (self._mean_task_duration *
-                              self._effective_batch_size)
-            if (self._mean_task_duration != 0 and
+            old_batch_size = self._effective_batch_size
+            batch_duration = self._smoothed_batch_duration
+            if (batch_duration > 0 and
                 batch_duration < MIN_IDEAL_BATCH_DURATION):
-                self._effective_batch_size *= 2
-                self._print("Batch duration too fast (%.2fs.) "
+                new_batch_size = max(int(2 * old_batch_size * MIN_IDEAL_BATCH_DURATION / batch_duration), 1)
+                self._effective_batch_size = batch_size = new_batch_size
+                self._smoothed_batch_duration = 0  # reset estimation of the smoothed mean batch time
+                self._print("Batch computation too fast (%.4fs.) "
                             "Setting batch_size=%d.", (
-                                batch_duration, self._effective_batch_size))
+                                batch_duration, batch_size))
             elif (batch_duration > MAX_IDEAL_BATCH_DURATION and
-                  self._effective_batch_size >= 2):
-                self._effective_batch_size /= 2
-                self._print("Batch duration too slow (%.2fs.) "
+                  old_batch_size >= 2):
+                # The current batch size is too big, the duration of
+                # individual tasks might
+                self._effective_batch_size = batch_size = old_batch_size // 2
+                self._smoothed_batch_duration = 0  # reset estimation of the smoothed mean batch time
+                self._print("Batch computation too slow (%.2fs.) "
                             "Setting batch_size=%d.", (
-                                batch_duration, self._effective_batch_size))
-            batch_size = self._effective_batch_size
+                                batch_duration, batch_size))
+            else:
+                # No batch size adjustment
+                batch_size = old_batch_size
         else:
+            # Fixed batch size strategy
             batch_size = self.batch_size
         tasks = BatchedCalls(itertools.islice(iterator, batch_size))
         if not tasks:
+            # No more tasks available in the iterator: tell caller to stop.
             return False
         else:
             self.dispatch(tasks)
@@ -720,7 +730,7 @@ class Parallel(Logger):
         self.n_batches_dispatched = 0
         self.n_dispatched_tasks = 0
         self.n_completed_tasks = 0
-        self._mean_task_duration = 0.0
+        self._smoothed_batch_duration = 0.0
         try:
             if set_environ_flag:
                 # Set an environment variable to avoid infinite loops
