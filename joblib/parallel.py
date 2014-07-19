@@ -190,7 +190,7 @@ class CallBack(object):
                 new_duration = 0.8 * old_duration + 0.2 * this_batch_duration
             self.parallel._smoothed_batch_duration = new_duration
 
-        self.parallel.print_progress(self.parallel.n_completed_tasks)
+        self.parallel.print_progress()
         if self.parallel._original_iterable:
             self.parallel.dispatch_next()
 
@@ -446,9 +446,10 @@ class Parallel(Logger):
         if self._pool is None:
             job = ImmediateApply(batch)
             self._jobs.append(job)
+            self.n_dispatched_batches += 1
             self.n_dispatched_tasks += len(batch)
             self.n_completed_tasks += len(batch)
-            if not _verbosity_filter(self.n_dispatched_tasks, self.verbose):
+            if not _verbosity_filter(self.n_dispatched_batches, self.verbose):
                 self._print('Done %3i jobs       | elapsed: %s',
                         (self.n_completed_tasks,
                             short_format_time(time.time() - self._start_time)
@@ -463,6 +464,7 @@ class Parallel(Logger):
                 job = self._pool.apply_async(SafeFunction(batch), callback=cb)
                 self._jobs.append(job)
                 self.n_dispatched_tasks += len(batch)
+                self.n_dispatched_batches += 1
 
     def dispatch_next(self):
         """ Dispatch more data for parallel processing
@@ -539,7 +541,7 @@ class Parallel(Logger):
         msg = msg % msg_args
         writer('[%s]: %s\n' % (self, msg))
 
-    def print_progress(self, index):
+    def print_progress(self):
         """Display the process of the parallel execution only a fraction
            of time, controlled by self.verbose.
         """
@@ -550,13 +552,14 @@ class Parallel(Logger):
         # This is heuristic code to print only 'verbose' times a messages
         # The challenge is that we may not know the queue length
         if self._original_iterable:
-            if _verbosity_filter(index, self.verbose):
+            if _verbosity_filter(self.n_dispatched_batches, self.verbose):
                 return
-            self._print('Done %3i jobs       | elapsed: %s',
-                        (index + 1,
+            self._print('Done %3i tasks      | elapsed: %s',
+                        (self.n_completed_tasks,
                          short_format_time(elapsed_time),
                         ))
         else:
+            index = self.n_dispatched_batches
             # We are finished dispatching
             queue_length = self.n_dispatched_tasks
             # We always display the first loop
@@ -731,7 +734,7 @@ class Parallel(Logger):
             iterable = list(itertools.islice(iterable, pre_dispatch))
 
         self._start_time = time.time()
-        self.n_batches_dispatched = 0
+        self.n_dispatched_batches = 0
         self.n_dispatched_tasks = 0
         self.n_completed_tasks = 0
         self._smoothed_batch_duration = 0.0
