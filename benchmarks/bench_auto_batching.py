@@ -58,7 +58,7 @@ if __name__ == "__main__":
         # batch_size=200,  # batch_size='auto' by default
         # memmap_input=True,  # if True manually memmap input out of timing
         # backend='threading',  # backend='multiprocessing' by default
-        # input_data_size=int(2e7),  # input output data size in bytes
+        input_data_size=int(2e7),  # input output data size in bytes
         output_data_size=int(1e5),  # input output data size in bytes
         n_jobs=2,
         verbose=1,
@@ -66,8 +66,8 @@ if __name__ == "__main__":
     print("Common benchmark parameters:")
     pprint(bench_parameters)
 
-    parallel.MIN_IDEAL_BATCH_DURATION = .05
-    parallel.MAX_IDEAL_BATCH_DURATION = .5
+    parallel.MIN_IDEAL_BATCH_DURATION = 0.2
+    parallel.MAX_IDEAL_BATCH_DURATION = 2
 
     # First pair of benchmarks to check that the auto-batching strategy is
     # stable (do not change the batch size too often) in the presence of of
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     print('# high variance, no trend')
     # censored gaussian distribution
-    high_variance = np.random.normal(loc=0.00001, scale=0.001, size=5000)
+    high_variance = np.random.normal(loc=0.000001, scale=0.001, size=5000)
     high_variance[high_variance < 0] = 0
 
     bench_short_tasks(high_variance, **bench_parameters)
@@ -86,11 +86,15 @@ if __name__ == "__main__":
     bench_short_tasks(low_variance, **bench_parameters)
 
     # Second pair of benchmarks: one has a cycling task duration pattern that
-    # the auto batching feature should be able to track while the other
+    # the auto batching feature should be able to roughly track. We use a pair
+    # power of cos to get only positive times with a majority close to zero
+    # (only data transfer overhead).
+    # The shuffle variant should not oscillate too much and still
+    # approximately have the same total run time.
 
-    print('# cyclic trend, 2 periods')
-    slow_time = 0.01
-    positive_wave = np.cos(np.linspace(1, 8 * np.pi, 1000)) ** 2
+    print('# cyclic trend')
+    slow_time = 0.1
+    positive_wave = np.cos(np.linspace(1, 4 * np.pi, 300)) ** 8
     cyclic = positive_wave * slow_time
     bench_short_tasks(cyclic, **bench_parameters)
 

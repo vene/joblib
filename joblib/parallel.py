@@ -39,8 +39,14 @@ VALID_BACKENDS = ['multiprocessing', 'threading']
 # Environment variables to protect against bad situations when nesting
 JOBLIB_SPAWNED_PROCESS = "__JOBLIB_SPAWNED_PARALLEL__"
 
-MIN_IDEAL_BATCH_DURATION = .05  # seconds
-MAX_IDEAL_BATCH_DURATION = .5
+# In seconds, should be big enough to hide scheduling
+# This settings was found by running benchmarks/bench_auto_batching.py
+# with various parameters on various platforms.
+MIN_IDEAL_BATCH_DURATION = .2
+
+# Should not be too high to avoid stragglers: long jobs running alone
+# on a single worker while other workers have no work to process any more.
+MAX_IDEAL_BATCH_DURATION = 2
 
 
 class BatchedCalls(object):
