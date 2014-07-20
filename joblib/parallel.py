@@ -476,6 +476,9 @@ class Parallel(Logger):
     def dispatch_next(self):
         """ Dispatch more data for parallel processing
         """
+        if len(self._jobs) == 0:
+            warnings.warn(UserWarning, "Dispatch queue is starved. Please "
+                          "increase the pre_dispatch amount.")
         self._dispatch_amount += 1
         while self._dispatch_amount:
             try:
