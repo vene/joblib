@@ -39,7 +39,8 @@ VALID_BACKENDS = ['multiprocessing', 'threading']
 # Environment variables to protect against bad situations when nesting
 JOBLIB_SPAWNED_PROCESS = "__JOBLIB_SPAWNED_PARALLEL__"
 
-# In seconds, should be big enough to hide scheduling
+# In seconds, should be big enough to hide multiprocessing dispatching
+# overhead.
 # This settings was found by running benchmarks/bench_auto_batching.py
 # with various parameters on various platforms.
 MIN_IDEAL_BATCH_DURATION = .2
