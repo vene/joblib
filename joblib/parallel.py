@@ -508,9 +508,11 @@ class Parallel(Logger):
             batch_duration = self._smoothed_batch_duration
             if (batch_duration > 0 and
                 batch_duration < MIN_IDEAL_BATCH_DURATION):
-                new_batch_size = max(int(2 * old_batch_size * MIN_IDEAL_BATCH_DURATION / batch_duration), 1)
+                ideal_batch_size = int(old_batch_size * MIN_IDEAL_BATCH_DURATION
+                                       / batch_duration)
+                # Multiply by two to limit oscilations between min and max.
+                new_batch_size = max(2 * ideal_batch_size, 1)
                 self._effective_batch_size = batch_size = new_batch_size
-                self._smoothed_batch_duration = 0  # reset estimation of the smoothed mean batch time
                 self._print("Batch computation too fast (%.4fs.) "
                             "Setting batch_size=%d.", (
                                 batch_duration, batch_size))
@@ -519,13 +521,20 @@ class Parallel(Logger):
                 # The current batch size is too big, the duration of
                 # individual tasks might
                 self._effective_batch_size = batch_size = old_batch_size // 2
-                self._smoothed_batch_duration = 0  # reset estimation of the smoothed mean batch time
                 self._print("Batch computation too slow (%.2fs.) "
                             "Setting batch_size=%d.", (
                                 batch_duration, batch_size))
             else:
                 # No batch size adjustment
                 batch_size = old_batch_size
+
+            if batch_size != old_batch_size:
+                # Reset estimation of the smoothed mean batch duration: this
+                # estimate is updated in the multiprocessing apply_async
+                # CallBack as long as the batch_size is constant. Therefore
+                # we need to reset the estimate whenever we re-tune the batch
+                # size.
+                self._smoothed_batch_duration = 0
         else:
             # Fixed batch size strategy
             batch_size = self.batch_size

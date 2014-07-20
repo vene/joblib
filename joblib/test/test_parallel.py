@@ -40,6 +40,7 @@ from ..parallel import mp, cpu_count, VALID_BACKENDS
 from ..my_exceptions import JoblibException
 
 import nose
+from nose.tools import assert_equal, assert_true, assert_false
 
 
 ALL_VALID_BACKENDS = [None] + VALID_BACKENDS
@@ -253,11 +254,11 @@ def check_dispatch_one_job(backend):
     Parallel(n_jobs=1, batch_size=4, backend=backend)(
         delayed(consumer)(queue, x) for x in producer())
     nose.tools.assert_equal(queue, [
-        # First batch 
+        # First batch
         'Produced 0', 'Produced 1', 'Produced 2', 'Produced 3',
         'Consumed 0', 'Consumed 1', 'Consumed 2', 'Consumed 3',
 
-        # Second batch 
+        # Second batch
         'Produced 4', 'Produced 5', 'Consumed 4', 'Consumed 5',
     ])
     nose.tools.assert_equal(len(queue), 12)
@@ -299,6 +300,31 @@ def check_dispatch_multiprocessing(backend):
 def test_dispatch_multiprocessing():
     for backend in VALID_BACKENDS:
         yield check_dispatch_multiprocessing, backend
+
+
+def test_batching_auto_threading():
+    # batching='auto' with the threading backend leaves the effective batch size
+    # to 1 (no batching) as it has found to never been beneficial with this
+    # low-overhead backend.
+    p = Parallel(n_jobs=2, batch_size='auto', backend='threading')
+    p(delayed(id)(i) for i in range(5000))  # many very fast tasks
+    assert_equal(p._effective_batch_size, 1)
+
+
+def test_batching_auto_multiprocessing():
+    # Batching is not enabled whith the threading backend as it has found
+    # to never been beneficial
+    p = Parallel(n_jobs=2, batch_size='auto', backend='multiprocessing')
+    p(delayed(id)(i) for i in range(5000))  # many very fast tasks
+
+    # When the auto-tuning of the batch size is enabled
+    # size kicks in the following attribute gets updated.
+    assert_true(hasattr(p, '_effective_batch_size'))
+
+    # It should be strictly larger than 1 but as we don't want heisen failures
+    # on clogged CI worker environment be safe and only check that it's a
+    # strictly positive number.
+    assert_true(p._effective_batch_size > 0)
 
 
 def test_exception_dispatch():
