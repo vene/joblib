@@ -237,7 +237,7 @@ class Parallel(Logger):
 
         Parameters
         -----------
-        n_jobs: int
+        n_jobs: int, default: 1
             The number of jobs to use for the computation. If -1 all CPUs
             are used. If 1 is given, no parallel computing code is used
             at all, which is useful for debugging. For n_jobs below -1,
@@ -246,12 +246,12 @@ class Parallel(Logger):
         batch_size: int or 'auto', default: 'auto'
             The number of atomic tasks to dispatch at once to a specific
             worker. When individual evaluations are very fast, multiprocessing
-            will generally be slower than sequential computation because of the
-            overhead. Batching fast computations together can mitigate this.
-            The ``'auto'`` strategy starts off with a batch size of one, and
-            doubles it at every dispatch if the estimated average dispatch
-            completion time is under 1s.
-        backend: str or None
+            can be slower than sequential computation because of the overhead.
+            Batching fast computations together can mitigate this.
+            The ``'auto'`` strategy keeps track of the time it takes for a batch
+            to complete, and dynamically adjusts the batch size to keep the time
+            on the order of half a second, using a heuristic.
+        backend: str or None, default: 'multiprocessing'
             Specify the parallelization backend implementation.
             Supported backends are:
               - "multiprocessing" used by default, can induce some
@@ -270,9 +270,8 @@ class Parallel(Logger):
             The frequency of the messages increases with the verbosity level.
             If it more than 10, all iterations are reported.
         pre_dispatch: {'all', integer, or expression, as in '3*n_jobs'}
-            The amount of jobs to be pre-dispatched. Default is 'all',
-            but it may be memory consuming, for instance if each job
-            involves a lot of a data.
+            The amount of jobs to be pre-dispatched. Default is '2 * n_jobs'.
+            For very small jobs it can be more efficient to pre-dispatch more.
         temp_folder: str, optional
             Folder to be used by the pool for memmaping large arrays
             for sharing memory with worker processes. If None, this will try in
@@ -413,12 +412,13 @@ class Parallel(Logger):
          [Parallel(n_jobs=2)]: Done   5 out of   6 | elapsed:    0.0s remaining:    0.0s
          [Parallel(n_jobs=2)]: Done   6 out of   6 | elapsed:    0.0s finished
     '''
-    def __init__(self, n_jobs=1, batch_size='auto', backend=None, verbose=0,
-            pre_dispatch='2 * n_jobs', temp_folder=None, max_nbytes='1M',
-            mmap_mode='r'):
+    def __init__(self, n_jobs=1, batch_size='auto', backend='multiprocessing',
+                 verbose=0, pre_dispatch='2 * n_jobs', temp_folder=None,
+                 max_nbytes='1M', mmap_mode='r'):
         self.verbose = verbose
         self._mp_context = None
         if backend is None:
+            # `backend=None` was supported in 0.8.2 with this effect
             backend = "multiprocessing"
         elif hasattr(backend, 'Pool') and hasattr(backend, 'Lock'):
             # Make it possible to pass a custom multiprocessing context as
